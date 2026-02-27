@@ -1,0 +1,7 @@
+{
+  "name": "Sog'lom Hayot - Onlayn Poliklinika",
+  "description": "Onlayn poliklinika, dori eslatmalari va AI simptom tekshiruvchisi birlashtirilgan sog'liqni saqlash platformasi.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sog'lom Hayot - Onlayn Poliklinika (Python)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .nav-item.active { @apply bg-emerald-50 text-emerald-600 shadow-sm; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+    <div id="auth-container" class="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <!-- Landing Page / Auth will be injected here -->
+    </div>
+
+    <div id="app-container" class="min-h-screen hidden flex-col md:flex-row">
+        <!-- Sidebar -->
+        <nav class="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col gap-2 sticky top-0 h-auto md:h-screen">
+            <div class="flex items-center gap-3 px-2 py-4 mb-4">
+                <div class="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+                    <i data-lucide="activity"></i>
+                </div>
+                <span class="font-bold text-xl tracking-tight text-slate-800">Sog'lom Hayot</span>
+            </div>
+            <button onclick="showSection('dashboard')" id="nav-dashboard" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all">
+                <i data-lucide="home"></i> Asosiy
+            </button>
+            <button onclick="showSection('polyclinic')" id="nav-polyclinic" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all">
+                <i data-lucide="stethoscope"></i> Poliklinika
+            </button>
+            <button onclick="showSection('meds')" id="nav-meds" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all">
+                <i data-lucide="pill"></i> Dori Eslatmalari
+            </button>
+            <button onclick="showSection('symptoms')" id="nav-symptoms" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all">
+                <i data-lucide="search"></i> AI Simptomlar
+            </button>
+            <button onclick="showSection('profile')" id="nav-profile" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all">
+                <i data-lucide="user"></i> Profil
+            </button>
+            <div class="mt-4 pt-4 border-t border-slate-100">
+                <button onclick="showSection('admin')" id="nav-admin" class="nav-item hidden flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all">
+                    <i data-lucide="settings"></i> Admin Panel
+                </button>
+                <button onclick="logout()" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-500 hover:bg-rose-50 transition-all mt-2">
+                    <i data-lucide="log-out"></i> Chiqish
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-4 md:p-8 overflow-y-auto" id="main-content">
+            <!-- Content will be injected here -->
+        </main>
+    </div>
+
+    <script>
+        let medications = [];
+        let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+        let isLoggedIn = !!currentUser;
+
+        function init() {
+            if (isLoggedIn) {
+                document.getElementById('auth-container').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                document.getElementById('app-container').classList.add('flex');
+                
+                // Load user-specific meds
+                medications = JSON.parse(localStorage.getItem(`meds_${currentUser.email}`) || '[]');
+                
+                // Strictly manage admin panel visibility
+                const adminNav = document.getElementById('nav-admin');
+                if (currentUser && currentUser.email === 'admin@example.com') {
+                    adminNav.style.display = 'flex';
+                    adminNav.classList.remove('hidden');
+                } else {
+                    adminNav.style.display = 'none';
+                    adminNav.classList.add('hidden');
+                }
+                
+                showSection('dashboard');
+            } else {
+                showLanding();
+            }
+            lucide.createIcons();
+        }
+
+        // Listen for Google OAuth success
+        window.addEventListener('message', (event) => {
+            if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+                const user = event.data.user;
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                currentUser = user;
+                isLoggedIn = true;
+                
+                // Register user in backend to update stats
+                fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(user)
+                });
+                
+                init();
+            }
+        });
+
+        async function loginWithGoogle() {
+            try {
+                const res = await fetch('/api/auth/google/url');
+                const { url } = await res.json();
+                window.open(url, 'google_auth', 'width=500,height=600');
+            } catch (e) {
+                alert('Google bilan ulanishda xatolik');
+            }
+        }
+
+        function showLanding() {
+            const container = document.getElementById('auth-container');
+            container.innerHTML = `
+                <div class="max-w-4xl w-full space-y-12 text-center">
+                    <div class="space-y-4">
+                        <div class="w-20 h-20 bg-emerald-500 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-emerald-200 mx-auto mb-8">
+                            <i data-lucide="activity" size="40"></i>
+                        </div>
+                        <h1 class="text-5xl md:text-6xl font-black text-slate-900 tracking-tight">Sog'lom Hayot</h1>
+                        <p class="text-xl text-slate-500 max-w-2xl mx-auto">Sizning shaxsiy tibbiy yordamchingiz. Onlayn poliklinika, dori eslatmalari va aqlli AI tahlili - hammasi bitta joyda.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                        <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+                            <div class="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center"><i data-lucide="stethoscope"></i></div>
+                            <h3 class="text-xl font-bold">Onlayn Poliklinika</h3>
+                            <p class="text-slate-500 text-sm">Malakali shifokorlarni toping va uyingizdan chiqmasdan qabulga yoziling.</p>
+                        </div>
+                        <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+                            <div class="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center"><i data-lucide="pill"></i></div>
+                            <h3 class="text-xl font-bold">Dori Eslatmalari</h3>
+                            <p class="text-slate-500 text-sm">Dori ichish vaqtini hech qachon o'tkazib yubormang. Biz sizga eslatib turamiz.</p>
+                        </div>
+                        <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+                            <div class="w-12 h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center"><i data-lucide="brain"></i></div>
+                            <h3 class="text-xl font-bold">AI Simptomlar</h3>
+                            <p class="text-slate-500 text-sm">Simptomlaringizni yozing va sun'iy intellektdan dastlabki tahlilni oling.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
+                        <button onclick="loginWithGoogle()" class="w-full sm:w-auto px-12 py-4 bg-white text-slate-700 border border-slate-200 rounded-2xl font-bold text-lg hover:bg-slate-50 transition-all flex items-center justify-center gap-3 shadow-sm">
+                            <img src="https://www.google.com/favicon.ico" class="w-5 h-5"> Google bilan kirish
+                        </button>
+                        <button onclick="showLogin()" class="w-full sm:w-auto px-12 py-4 bg-emerald-500 text-white rounded-2xl font-bold text-lg hover:bg-emerald-600 shadow-xl shadow-emerald-200 transition-all">Email bilan kirish</button>
+                    </div>
+                    
+                    <div class="pt-12 border-t border-slate-100">
+                        <h2 class="text-2xl font-bold mb-4">Biz haqimizda</h2>
+                        <p class="text-slate-500 max-w-3xl mx-auto leading-relaxed">
+                            "Sog'lom Hayot" loyihasi aholiga sifatli va tezkor tibbiy maslahat berish, dori-darmonlarni tartibli qabul qilishni ta'minlash maqsadida yaratilgan. 
+                            Biz zamonaviy texnologiyalarni tibbiyot bilan birlashtirib, har bir insonning sog'lig'ini asrashga hissa qo'shamiz.
+                        </p>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function showLogin() {
+            const container = document.getElementById('auth-container');
+            container.innerHTML = `
+                <div class="max-w-md w-full bg-white p-10 rounded-3xl shadow-2xl border border-slate-100 space-y-8">
+                    <div class="text-center space-y-2">
+                        <h2 class="text-3xl font-black text-slate-900">Xush kelibsiz!</h2>
+                        <p class="text-slate-500">Hisobingizga kiring</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Email</label>
+                            <input type="email" placeholder="user@example.com" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Parol</label>
+                            <input type="password" placeholder="••••••••" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all">
+                        </div>
+                    </div>
+                    <button onclick="login()" class="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-lg hover:bg-emerald-600 shadow-xl shadow-emerald-200 transition-all">Kirish</button>
+                    <p class="text-center text-sm text-slate-500">
+                        Hisobingiz yo'qmi? <button onclick="showRegister()" class="text-emerald-600 font-bold hover:underline">Ro'yxatdan o'tish</button>
+                    </p>
+                    <button onclick="showLanding()" class="w-full text-slate-400 text-sm hover:text-slate-600 transition-all">Orqaga qaytish</button>
+                </div>
+            `;
+        }
+
+        function showRegister() {
+            const container = document.getElementById('auth-container');
+            container.innerHTML = `
+                <div class="max-w-md w-full bg-white p-10 rounded-3xl shadow-2xl border border-slate-100 space-y-8">
+                    <div class="text-center space-y-2">
+                        <h2 class="text-3xl font-black text-slate-900">Ro'yxatdan o'tish</h2>
+                        <p class="text-slate-500">Yangi hisob yarating</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">To'liq ismingiz</label>
+                            <input type="text" placeholder="Ali Valiyev" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Email</label>
+                            <input type="email" placeholder="user@example.com" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Parol</label>
+                            <input type="password" placeholder="••••••••" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all">
+                        </div>
+                    </div>
+                    <button onclick="login()" class="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-lg hover:bg-emerald-600 shadow-xl shadow-emerald-200 transition-all">Ro'yxatdan o'tish</button>
+                    <p class="text-center text-sm text-slate-500">
+                        Hisobingiz bormi? <button onclick="showLogin()" class="text-emerald-600 font-bold hover:underline">Kirish</button>
+                    </p>
+                    <button onclick="showLanding()" class="w-full text-slate-400 text-sm hover:text-slate-600 transition-all">Orqaga qaytish</button>
+                </div>
+            `;
+        }
+
+        function login() {
+            const email = document.querySelector('input[type="email"]')?.value || 'user@example.com';
+            const user = { email, name: email.split('@')[0] };
+            localStorage.setItem('currentUser', JSON.stringify(user));
+            currentUser = user;
+            isLoggedIn = true;
+            
+            fetch('/api/auth/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(user)
+            });
+            
+            init();
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            currentUser = null;
+            isLoggedIn = false;
+            document.getElementById('app-container').classList.add('hidden');
+            document.getElementById('app-container').classList.remove('flex');
+            document.getElementById('auth-container').classList.remove('hidden');
+            showLanding();
+        }
+
+        function showSection(section) {
+            const content = document.getElementById('main-content');
+            
+            // Strictly protect admin panel
+            if (section === 'admin' && (!currentUser || currentUser.email !== 'admin@example.com')) {
+                showSection('dashboard');
+                return;
+            }
+
+            // Update active nav
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('bg-emerald-50', 'text-emerald-600', 'shadow-sm'));
+            const navEl = document.getElementById('nav-' + section);
+            if (navEl) navEl.classList.add('bg-emerald-50', 'text-emerald-600', 'shadow-sm');
+
+            if (section === 'dashboard') {
+                content.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div></div>';
+                fetch('/api/admin/stats').then(res => res.json()).then(stats => {
+                    content.innerHTML = `
+                        <div class="max-w-4xl mx-auto space-y-8">
+                            <header>
+                                <h1 class="text-4xl font-black text-slate-900 tracking-tight">Xayrli kun!</h1>
+                                <p class="text-slate-500 mt-1 text-lg">Bugungi sog'liq holatingiz va rejalaringiz.</p>
+                            </header>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-6 hover:shadow-md transition-all">
+                                    <div class="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500"><i data-lucide="pill" size="28"></i></div>
+                                    <div><p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dori ichish</p><p class="text-2xl font-black text-slate-800">${medications.length} ta</p></div>
+                                </div>
+                                <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-6 hover:shadow-md transition-all">
+                                    <div class="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500"><i data-lucide="calendar" size="28"></i></div>
+                                    <div><p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Qabullar</p><p class="text-2xl font-black text-slate-800">${stats.total_appointments} ta</p></div>
+                                </div>
+                                <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-6 hover:shadow-md transition-all">
+                                    <div class="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500"><i data-lucide="activity" size="28"></i></div>
+                                    <div><p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Shifokorlar</p><p class="text-2xl font-black text-slate-800">${stats.total_doctors} ta</p></div>
+                                </div>
+                                <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-6 hover:shadow-md transition-all">
+                                    <div class="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500"><i data-lucide="users" size="28"></i></div>
+                                    <div><p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Foydalanuvchilar</p><p class="text-2xl font-black text-slate-800">${stats.total_users || 0} ta</p></div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-emerald-500 p-10 rounded-3xl text-white shadow-2xl shadow-emerald-200 relative overflow-hidden group">
+                                <div class="relative z-10 space-y-4 max-w-lg">
+                                    <h2 class="text-3xl font-black leading-tight">Sog'lig'ingiz haqida qayg'uryapsizmi?</h2>
+                                    <p class="text-emerald-50 opacity-90">AI simptom tekshiruvchimizdan foydalanib ko'ring va dastlabki tahlilni oling.</p>
+                                    <button onclick="showSection('symptoms')" class="px-8 py-3 bg-white text-emerald-600 rounded-xl font-bold hover:bg-emerald-50 transition-all">Hozir tekshirish</button>
+                                </div>
+                                <i data-lucide="brain" size="200" class="absolute -right-10 -bottom-10 text-white/10 rotate-12 group-hover:scale-110 transition-all duration-500"></i>
+                            </div>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                });
+            } else if (section === 'polyclinic') {
+                content.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div></div>';
+                fetch('/api/doctors').then(res => res.json()).then(docs => {
+                    let html = '<h1 class="text-4xl font-black mb-8 tracking-tight">Onlayn Poliklinika</h1><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">';
+                    docs.forEach(doc => {
+                        html += `
+                            <div class="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl transition-all group">
+                                <div class="p-8 space-y-4">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500"><i data-lucide="user" size="32"></i></div>
+                                        <div>
+                                            <p class="text-slate-900 font-black text-xl">${doc.name}</p>
+                                            <p class="text-emerald-600 font-bold text-sm uppercase tracking-widest">${doc.specialty}</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between text-sm text-slate-500 pt-4 border-t border-slate-50">
+                                        <span class="flex items-center gap-1"><i data-lucide="clock" size="14"></i> ${doc.exp} tajriba</span>
+                                        <span class="flex items-center gap-1 text-emerald-600 font-bold"><i data-lucide="star" size="14"></i> 4.9</span>
+                                    </div>
+                                    <button onclick="confirmAppointment('${doc.name}', ${doc.id})" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg">Qabulga yozilish</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    content.innerHTML = html;
+                    lucide.createIcons();
+                });
+            } else if (section === 'meds') {
+                renderMeds();
+            } else if (section === 'symptoms') {
+                content.innerHTML = `
+                    <div class="max-w-3xl mx-auto space-y-8">
+                        <header>
+                            <h1 class="text-4xl font-black text-slate-900 tracking-tight">AI Simptom Tekshiruvchi</h1>
+                            <p class="text-slate-500 text-lg">Simptomlaringizni yozing va sun'iy intellekt tahlilini oling.</p>
+                        </header>
+                        <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                            <div class="bg-amber-50 p-4 rounded-2xl flex gap-3 text-amber-800 text-sm border border-amber-100">
+                                <i data-lucide="alert-circle" class="shrink-0"></i>
+                                <p><strong>Eslatma:</strong> AI natijalari faqat maslahat xarakteriga ega. Jiddiy holatlarda shifokorga murojaat qiling.</p>
+                            </div>
+                            <textarea id="symptom-input" class="w-full h-48 px-6 py-4 bg-slate-50 border border-slate-200 rounded-3xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all resize-none text-lg" placeholder="Masalan: Boshim og'riyapti, tana haroratim 38 daraja..."></textarea>
+                            <button onclick="checkSymptoms()" id="check-btn" class="w-full py-5 bg-emerald-500 text-white rounded-2xl font-black text-xl hover:bg-emerald-600 shadow-2xl shadow-emerald-200 flex items-center justify-center gap-3 transition-all">
+                                <i data-lucide="sparkles"></i> Tahlilni boshlash
+                            </button>
+                        </div>
+                        <div id="ai-result" class="mt-8 p-10 bg-white rounded-3xl border border-slate-100 shadow-sm hidden prose prose-slate max-w-none leading-relaxed text-lg"></div>
+                    </div>
+                `;
+                lucide.createIcons();
+            } else if (section === 'admin') {
+                renderAdmin();
+            } else if (section === 'profile') {
+                renderProfile();
+            }
+            lucide.createIcons();
+        }
+
+        function renderProfile() {
+            const content = document.getElementById('main-content');
+            content.innerHTML = `
+                <div class="max-w-3xl mx-auto space-y-8">
+                    <header>
+                        <h1 class="text-4xl font-black text-slate-900 tracking-tight">Mening Profilim</h1>
+                        <p class="text-slate-500 text-lg">Shaxsiy ma'lumotlaringizni boshqaring.</p>
+                    </header>
+                    
+                    <div class="bg-white p-10 rounded-3xl border border-slate-100 shadow-sm space-y-8">
+                        <div class="flex items-center gap-8">
+                            <div class="w-24 h-24 bg-emerald-500 rounded-3xl flex items-center justify-center text-white text-4xl font-black shadow-xl shadow-emerald-200">
+                                ${currentUser.name[0].toUpperCase()}
+                            </div>
+                            <div class="space-y-1">
+                                <h2 class="text-2xl font-black text-slate-800">${currentUser.name}</h2>
+                                <p class="text-slate-500 font-medium">${currentUser.email}</p>
+                                <span class="inline-block px-3 py-1 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-full uppercase tracking-widest">
+                                    ${currentUser.email === 'admin@example.com' ? 'Administrator' : 'Foydalanuvchi'}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-slate-50">
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Ism sharifi</label>
+                                <div class="px-5 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 font-medium">${currentUser.name}</div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Email manzili</label>
+                                <div class="px-5 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 font-medium">${currentUser.email}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-8">
+                            <button onclick="logout()" class="w-full py-4 bg-rose-50 text-rose-500 rounded-2xl font-bold hover:bg-rose-100 transition-all flex items-center justify-center gap-2">
+                                <i data-lucide="log-out"></i> Tizimdan chiqish
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function renderAdmin() {
+            const content = document.getElementById('main-content');
+            content.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div></div>';
+            
+            const [statsRes, docsRes] = await Promise.all([
+                fetch('/api/admin/stats'),
+                fetch('/api/doctors')
+            ]);
+            const stats = await statsRes.json();
+            const docs = await docsRes.json();
+
+            let docsHtml = docs.map(d => `
+                <div class="bg-white p-5 rounded-2xl border border-slate-100 flex items-center justify-between hover:shadow-md transition-all">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400"><i data-lucide="user"></i></div>
+                        <div>
+                            <p class="font-black text-slate-800">${d.name}</p>
+                            <p class="text-xs font-bold text-emerald-600 uppercase tracking-widest">${d.specialty} • ${d.exp}</p>
+                        </div>
+                    </div>
+                    <button onclick="deleteDoctor(${d.id})" class="text-rose-400 p-3 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all">
+                        <i data-lucide="trash-2" size="20"></i>
+                    </button>
+                </div>
+            `).join('');
+
+            content.innerHTML = `
+                <div class="max-w-5xl mx-auto space-y-10">
+                    <header>
+                        <h1 class="text-4xl font-black text-slate-900 tracking-tight">Admin Panel</h1>
+                        <p class="text-slate-500 text-lg">Tizimni boshqarish va statistika.</p>
+                    </header>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Jami Shifokorlar</p>
+                            <p class="text-4xl font-black text-slate-800">${stats.total_doctors}</p>
+                        </div>
+                        <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Jami Qabullar</p>
+                            <p class="text-4xl font-black text-slate-800">${stats.total_appointments}</p>
+                        </div>
+                        <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-2">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Jami Dorilar</p>
+                            <p class="text-4xl font-black text-slate-800">${stats.total_meds}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                        <section class="space-y-6">
+                            <h2 class="text-2xl font-black text-slate-800">Shifokor qo'shish</h2>
+                            <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-5">
+                                <div class="space-y-1">
+                                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Ism sharifi</label>
+                                    <input id="admin-doc-name" placeholder="Dr. Ali Valiyev" class="w-full px-5 py-3 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Mutaxassisligi</label>
+                                    <input id="admin-doc-spec" placeholder="Terapevt" class="w-full px-5 py-3 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Tajribasi</label>
+                                    <input id="admin-doc-exp" placeholder="12 yil" class="w-full px-5 py-3 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20">
+                                </div>
+                                <button onclick="addDoctor()" class="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-lg hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-200">
+                                    Qo'shish
+                                </button>
+                            </div>
+                        </section>
+
+                        <section class="space-y-6">
+                            <h2 class="text-2xl font-black text-slate-800">Shifokorlar ro'yxati</h2>
+                            <div class="space-y-4 h-[500px] overflow-y-auto pr-2 custom-scrollbar">${docsHtml}</div>
+                        </section>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function addDoctor() {
+            const name = document.getElementById('admin-doc-name').value;
+            const specialty = document.getElementById('admin-doc-spec').value;
+            const exp = document.getElementById('admin-doc-exp').value;
+            
+            if(!name || !specialty || !exp) return;
+
+            await fetch('/api/admin/add_doctor', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, specialty, exp})
+            });
+            renderAdmin();
+        }
+
+        async function deleteDoctor(id) {
+            if(!confirm('Haqiqatan ham o\'chirmoqchimisiz?')) return;
+            await fetch('/api/admin/delete_doctor', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id})
+            });
+            renderAdmin();
+        }
+
+        function renderMeds() {
+            const content = document.getElementById('main-content');
+            let medsHtml = medications.map((m, i) => `
+                <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
+                    <div class="flex items-center gap-6">
+                        <div class="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500"><i data-lucide="pill" size="24"></i></div>
+                        <div>
+                            <h3 class="font-black text-slate-800 text-lg">${m.name}</h3>
+                            <p class="text-slate-500 font-medium">${m.dosage} • Har kuni ${m.time}da</p>
+                        </div>
+                    </div>
+                    <button onclick="deleteMed(${i})" class="text-slate-300 hover:text-rose-500 p-3 hover:bg-rose-50 rounded-xl transition-all"><i data-lucide="trash-2"></i></button>
+                </div>
+            `).join('');
+
+            content.innerHTML = `
+                <div class="max-w-3xl mx-auto space-y-10">
+                    <header>
+                        <h1 class="text-4xl font-black text-slate-900 tracking-tight">Dori Eslatmalari</h1>
+                        <p class="text-slate-500 text-lg">Sog'lig'ingiz uchun dori ichish vaqtini o'tkazib yubormang.</p>
+                    </header>
+                    <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dori nomi</label>
+                            <input id="med-name" placeholder="Aspirin" class="w-full px-5 py-3 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Dozasi</label>
+                            <input id="med-dosage" placeholder="1 tabletka" class="w-full px-5 py-3 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">Vaqti</label>
+                            <div class="flex gap-2">
+                                <input id="med-time" type="time" class="flex-1 px-5 py-3 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20">
+                                <button onclick="addMed()" class="bg-emerald-500 text-white p-3 rounded-2xl hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-200"><i data-lucide="plus" size="28"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <button onclick="sendMedsToEmail()" class="flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-2xl font-bold hover:bg-blue-600 transition-all shadow-lg shadow-blue-200">
+                            <i data-lucide="mail"></i> Emailga yuborish
+                        </button>
+                    </div>
+                    <div class="space-y-4">${medsHtml || '<div class="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-200"><i data-lucide="pill" size="48" class="mx-auto text-slate-200 mb-4"></i><p class="text-slate-400 font-bold">Hozircha dori qo\'shilmagan</p></div>'}</div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function sendMedsToEmail() {
+            if (medications.length === 0) {
+                alert('Yuborish uchun dorilar yo\'q');
+                return;
+            }
+            try {
+                const res = await fetch('/api/send_email', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        email: currentUser.email,
+                        meds: medications
+                    })
+                });
+                const data = await res.json();
+                alert(data.message);
+            } catch (e) {
+                alert('Email yuborishda xatolik');
+            }
+        }
+
+        function addMed() {
+            const name = document.getElementById('med-name').value;
+            const dosage = document.getElementById('med-dosage').value;
+            const time = document.getElementById('med-time').value;
+            if(!name || !time) return;
+            medications.push({name, dosage, time});
+            localStorage.setItem(`meds_${currentUser.email}`, JSON.stringify(medications));
+            renderMeds();
+        }
+
+        function deleteMed(index) {
+            medications.splice(index, 1);
+            localStorage.setItem(`meds_${currentUser.email}`, JSON.stringify(medications));
+            renderMeds();
+        }
+
+        async function checkSymptoms() {
+            const input = document.getElementById('symptom-input').value;
+            const btn = document.getElementById('check-btn');
+            const resultDiv = document.getElementById('ai-result');
+            
+            if(!input.trim()) return;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<div class="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div> Tahlil qilinmoqda...';
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = '<div class="animate-pulse space-y-6"><div class="h-6 bg-slate-100 rounded w-3/4"></div><div class="h-6 bg-slate-100 rounded"></div><div class="h-6 bg-slate-100 rounded w-5/6"></div><div class="h-6 bg-slate-100 rounded w-1/2"></div></div>';
+            
+            try {
+                const res = await fetch('/api/check_symptoms', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({symptoms: input})
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok && data.analysis) {
+                    // Convert markdown-like bold to HTML
+                    let formatted = data.analysis
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\n/g, '<br>');
+                    resultDiv.innerHTML = `<div class="space-y-4">${formatted}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="p-4 bg-rose-50 text-rose-600 rounded-2xl border border-rose-100 font-bold">Xatolik: ${data.error || 'AI xizmati vaqtincha ishlamayapti'}</div>`;
+                }
+            } catch (e) {
+                console.error('AI Error:', e);
+                resultDiv.innerHTML = '<div class="p-4 bg-rose-50 text-rose-600 rounded-2xl border border-rose-100 font-bold">Tarmoq xatoligi yoki server bilan aloqa uzildi. Iltimos qaytadan urinib ko\'ring.</div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="sparkles"></i> Tahlilni boshlash';
+                lucide.createIcons();
+            }
+        }
+
+        let selectedDoctor = '';
+        let selectedDoctorId = null;
+
+        function confirmAppointment(docName, docId) {
+            selectedDoctor = docName;
+            selectedDoctorId = docId;
+            document.getElementById('modal-text').innerText = `${docName} qabuliga yozilishni tasdiqlaysizmi?`;
+            const modal = document.getElementById('confirmation-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('confirmation-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function completeBooking() {
+            try {
+                await fetch('/api/book_appointment', { 
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        doc_id: selectedDoctorId,
+                        user_email: currentUser.email
+                    })
+                });
+                alert(`${selectedDoctor} qabuliga muvaffaqiyatli yozildingiz!`);
+            } catch (e) {
+                alert('Xatolik yuz berdi.');
+            }
+            closeModal();
+        }
+
+        init();
+    </script>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-2xl max-w-sm w-full mx-4 space-y-6 shadow-2xl">
+            <div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500 mx-auto">
+                <i data-lucide="check-circle-2" size="32"></i>
+            </div>
+            <div class="text-center space-y-2">
+                <h3 class="text-xl font-bold text-slate-800">Tasdiqlash</h3>
+                <p id="modal-text" class="text-slate-500 text-sm">Siz haqiqatan ham ushbu shifokor qabuliga yozilmoqchimisiz?</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeModal()" class="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-medium hover:bg-slate-200 transition-colors">Bekor qilish</button>
+                <button onclick="completeBooking()" class="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-medium hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-200">Tasdiqlash</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
